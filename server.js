@@ -133,7 +133,7 @@ app.post('/seller/buy-item', async (req, res) => {
     // Seller calls YOUR Gateway API
     try {
         const gatewayRes = await axios.post(`${baseUrl}/api/create-order`, {
-            amount: 1.00, // Testing with 1 Rupee
+            amount: 2.00, // Testing with 1 Rupee
             seller_callback_url: `${baseUrl}/seller/webhook`, // Tell gateway where to report success
             seller_return_url: `${baseUrl}/shop.html?status=paid` // Tell gateway where to send user
         });
