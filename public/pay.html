@@ -7,21 +7,21 @@
     <script src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
     <style>
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Segoe UI', sans-serif; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
             height: 100vh; 
-            background: #121212; /* Dark Background */
+            background: #121212; 
             margin: 0; 
         }
         
         .box { 
-            background: #000000; /* PURE BLACK CARD */
+            background: #000000; 
             padding: 40px; 
-            border-radius: 30px; /* Extra Rounded Card */
+            border-radius: 30px; 
             text-align: center; 
-            box-shadow: 0 0 50px rgba(255, 255, 255, 0.1); /* Subtle white glow */
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.1); 
             width: 320px; 
             border: 1px solid #333;
         }
@@ -30,31 +30,46 @@
             color: #ffffff;
             margin-top: 0;
             font-weight: 300;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
+            font-size: 14px;
+            opacity: 0.8;
         }
 
         .amount { 
-            color: #00ff88; /* Neon Green */
-            font-size: 36px; 
+            color: #00ff88; 
+            font-size: 40px; 
             font-weight: 700; 
-            margin: 15px 0; 
-            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+            margin: 10px 0 20px 0; 
+            text-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
         }
 
+        /* 
+           TRICK FOR HD QUALITY: 
+           The container is 280px, but the Canvas inside will be 1000px+ 
+           shrunk down using CSS.
+        */
         #canvas { 
-            margin-top: 20px; 
+            width: 280px;
+            height: 280px;
+            margin: 0 auto;
             display: flex; 
             justify-content: center; 
+            align-items: center;
+        }
+        
+        /* Force the huge canvas to fit inside the small box */
+        #canvas canvas {
+            width: 100% !important;
+            height: auto !important;
         }
 
         #status { 
             margin-top: 25px; 
-            font-size: 14px; 
+            font-size: 13px; 
             color: #888; 
             font-weight: 500;
         }
 
-        /* Loader Animation */
         .spinner {
             display: inline-block;
             width: 10px;
@@ -71,10 +86,9 @@
 </head>
 <body>
     <div class="box">
-        <h3>PAYMENT GATEWAY</h3>
-        <div class="amount" id="amt">Loading...</div>
+        <h3>SECURE PAY</h3>
+        <div class="amount" id="amt">...</div>
         
-        <!-- The QR Code generates here -->
         <div id="canvas"></div>
         
         <p id="status"><span class="spinner"></span>Initializing...</p>
@@ -86,57 +100,58 @@
 
         async function load() {
             if (!orderId) {
-                document.body.innerHTML = "<h3 style='color:white; text-align:center'>Error: Missing Order ID</h3>";
+                document.body.innerHTML = "<h3 style='color:white; text-align:center'>Missing Order ID</h3>";
                 return;
             }
 
             try {
-                // 1. Fetch Order Data
                 const res = await fetch(`/api/order-details/${orderId}`);
                 if(!res.ok) {
-                    document.body.innerHTML = "<h3 style='color:white; text-align:center'>Invalid or Expired Order</h3>";
+                    document.body.innerHTML = "<h3 style='color:white; text-align:center'>Order Expired</h3>";
                     return;
                 }
                 const data = await res.json();
 
-                // 2. Update UI
                 document.getElementById('amt').innerText = `₹${data.amount}`;
-                document.getElementById('status').innerHTML = '<span class="spinner"></span>Scan with any UPI App';
+                document.getElementById('status').innerHTML = '<span class="spinner"></span>Scan to Pay';
 
-                // 3. Generate Styled QR Code (White on Transparent)
+                // --- HIGH RESOLUTION QR CONFIGURATION ---
                 const qr = new QRCodeStyling({
-                    width: 280,
-                    height: 280,
+                    // 1. GENERATE HUGE IMAGE (HD)
+                    width: 1200,  
+                    height: 1200,
+                    margin: 20,   // Safe space around QR
+                    
                     type: "canvas",
                     data: data.upi_string,
                     image: "https://cdn.jsdelivr.net/gh/OTTONRENT01/FOR-PHOTOS@main/QRLogo.png",
                     
-                    // --- THE STYLING YOU ASKED FOR ---
                     dotsOptions: {
-                        color: "#ffffff",  // White dots
-                        type: "rounded"    // Rounded dots
+                        color: "#ffffff",
+                        type: "rounded"
                     },
                     backgroundOptions: {
-                        color: "transparent", // Transparent background
+                        color: "transparent",
                     },
+                    // 2. CORNER STYLING
                     cornersSquareOptions: {
                         color: "#ffffff",
-                        type: "extra-rounded" // Extra rounded corners
+                        type: "extra-rounded" 
                     },
                     cornersDotOptions: {
                         color: "#ffffff",
-                        type: "dot"           // Dot inside corner
+                        type: "dot"
                     },
+                    // 3. LOGO POSITIONING
                     imageOptions: {
                         crossOrigin: "anonymous",
-                        margin: 10,
-                        imageSize: 0.4        // Logo Size
+                        margin: 15,    // Clears dots away from logo
+                        imageSize: 0.35 // 35% of the QR code (Balanced size)
                     }
                 });
 
                 qr.append(document.getElementById("canvas"));
 
-                // 4. Start Polling
                 checkInterval = setInterval(checkStatus, 3000);
 
             } catch (e) {
@@ -155,20 +170,15 @@
 
                 if (result.status === 'SUCCESS') {
                     document.getElementById('status').innerHTML = "✅ <b>Payment Successful!</b>";
-                    document.getElementById('status').style.color = "#00ff88"; // Green
+                    document.getElementById('status').style.color = "#00ff88"; 
                     clearInterval(checkInterval);
-                    
-                    if(result.redirect_to) {
-                        setTimeout(() => window.location.href = result.redirect_to, 2000);
-                    }
+                    if(result.redirect_to) setTimeout(() => window.location.href = result.redirect_to, 2000);
                 } else if (result.status === 'FRAUD') {
-                    document.getElementById('status').innerHTML = "❌ <b>Fraud: Amount Mismatch</b>";
-                    document.getElementById('status').style.color = "#ff4444"; // Red
+                    document.getElementById('status').innerHTML = "❌ <b>Fraud Detected</b>";
+                    document.getElementById('status').style.color = "#ff4444"; 
                     clearInterval(checkInterval);
                 }
-            } catch (e) {
-                console.log("Polling...");
-            }
+            } catch (e) { }
         }
 
         load();
