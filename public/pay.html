@@ -6,10 +6,11 @@
     <title>Secure Payment</title>
     <script src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #eee; }
-        .box { background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .amount { color: #27ae60; font-size: 24px; font-weight: bold; margin: 10px 0; }
-        #canvas { margin-top: 20px; }
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #eee; margin: 0; }
+        .box { background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 300px; }
+        .amount { color: #27ae60; font-size: 28px; font-weight: bold; margin: 10px 0; }
+        #canvas { margin-top: 20px; display: flex; justify-content: center; }
+        #status { margin-top: 15px; font-size: 14px; color: #555; }
     </style>
 </head>
 <body>
@@ -17,55 +18,79 @@
         <h3>Ayush Gateway</h3>
         <div class="amount" id="amt">Loading...</div>
         <div id="canvas"></div>
-        <p id="status">Scan with any UPI App</p>
+        <p id="status">Initializing...</p>
     </div>
 
     <script>
+        // 1. Get Order ID from URL
         const orderId = new URLSearchParams(window.location.search).get('order_id');
         let checkInterval;
 
         async function load() {
-            // 1. Get Data
-            const res = await fetch(`/api/order-details/${orderId}`);
-            if(!res.ok) return document.body.innerHTML = "Invalid Order";
-            const data = await res.json();
+            if (!orderId) {
+                document.body.innerHTML = "<h3 style='text-align:center; margin-top:50px'>Error: Missing Order ID</h3>";
+                return;
+            }
 
-            document.getElementById('amt').innerText = `₹${data.amount}`;
+            try {
+                // 2. Fetch Order Details from API
+                const res = await fetch(`/api/order-details/${orderId}`);
+                
+                if(!res.ok) {
+                    document.body.innerHTML = "<h3 style='text-align:center; margin-top:50px'>Invalid or Expired Order</h3>";
+                    return;
+                }
 
-            // 2. Style QR
-            const qr = new QRCodeStyling({
-                width: 250, height: 250,
-                data: data.upi_string,
-                image: "https://cdn.jsdelivr.net/gh/OTTONRENT01/FOR-PHOTOS@main/QRLogo.png",
-                dotsOptions: { color: "#000", type: "rounded" },
-                backgroundOptions: { color: "transparent" },
-                imageOptions: { crossOrigin: "anonymous", margin: 10 }
-            });
-            qr.append(document.getElementById("canvas"));
+                const data = await res.json();
+                document.getElementById('amt').innerText = `₹${data.amount}`;
+                document.getElementById('status').innerText = "Scan with any UPI App";
 
-            // 3. Poll for Status
-            checkInterval = setInterval(checkStatus, 3000);
+                // 3. Generate Styled QR Code
+                const qr = new QRCodeStyling({
+                    width: 250, height: 250,
+                    data: data.upi_string,
+                    image: "https://cdn.jsdelivr.net/gh/OTTONRENT01/FOR-PHOTOS@main/QRLogo.png",
+                    dotsOptions: { color: "#000", type: "rounded" },
+                    backgroundOptions: { color: "transparent" },
+                    imageOptions: { crossOrigin: "anonymous", margin: 10 }
+                });
+                qr.append(document.getElementById("canvas"));
+
+                // 4. Start Checking for Payment
+                checkInterval = setInterval(checkStatus, 3000);
+
+            } catch (e) {
+                document.getElementById('status').innerText = "Connection Error";
+            }
         }
 
         async function checkStatus() {
-            const res = await fetch('/api/verify', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ order_id: orderId })
-            });
-            const result = await res.json();
+            try {
+                const res = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ order_id: orderId })
+                });
+                const result = await res.json();
 
-            if (result.status === 'SUCCESS') {
-                document.getElementById('status').innerText = "✅ Payment Successful!";
-                document.getElementById('status').style.color = "green";
-                clearInterval(checkInterval);
-                setTimeout(() => window.location.href = result.redirect_to, 2000);
-            } else if (result.status === 'FRAUD') {
-                document.getElementById('status').innerText = "❌ Fraud Detected: Amount Mismatch";
-                document.getElementById('status').style.color = "red";
-                clearInterval(checkInterval);
+                if (result.status === 'SUCCESS') {
+                    document.getElementById('status').innerText = "✅ Payment Successful!";
+                    document.getElementById('status').style.color = "green";
+                    clearInterval(checkInterval);
+                    
+                    if(result.redirect_to) {
+                        setTimeout(() => window.location.href = result.redirect_to, 2000);
+                    }
+                } else if (result.status === 'FRAUD') {
+                    document.getElementById('status').innerText = "❌ Fraud Detected: Amount Mismatch";
+                    document.getElementById('status').style.color = "red";
+                    clearInterval(checkInterval);
+                }
+            } catch (e) {
+                console.log("Polling error...");
             }
         }
+
         load();
     </script>
 </body>
