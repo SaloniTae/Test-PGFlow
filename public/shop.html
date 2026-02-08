@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Payment</title>
+    <script src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #eee; }
+        .box { background: white; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .amount { color: #27ae60; font-size: 24px; font-weight: bold; margin: 10px 0; }
+        #canvas { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h3>Ayush Gateway</h3>
+        <div class="amount" id="amt">Loading...</div>
+        <div id="canvas"></div>
+        <p id="status">Scan with any UPI App</p>
+    </div>
+
+    <script>
+        const orderId = new URLSearchParams(window.location.search).get('order_id');
+        let checkInterval;
+
+        async function load() {
+            // 1. Get Data
+            const res = await fetch(`/api/order-details/${orderId}`);
+            if(!res.ok) return document.body.innerHTML = "Invalid Order";
+            const data = await res.json();
+
+            document.getElementById('amt').innerText = `₹${data.amount}`;
+
+            // 2. Style QR
+            const qr = new QRCodeStyling({
+                width: 250, height: 250,
+                data: data.upi_string,
+                image: "https://cdn.jsdelivr.net/gh/OTTONRENT01/FOR-PHOTOS@main/QRLogo.png",
+                dotsOptions: { color: "#000", type: "rounded" },
+                backgroundOptions: { color: "transparent" },
+                imageOptions: { crossOrigin: "anonymous", margin: 10 }
+            });
+            qr.append(document.getElementById("canvas"));
+
+            // 3. Poll for Status
+            checkInterval = setInterval(checkStatus, 3000);
+        }
+
+        async function checkStatus() {
+            const res = await fetch('/api/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ order_id: orderId })
+            });
+            const result = await res.json();
+
+            if (result.status === 'SUCCESS') {
+                document.getElementById('status').innerText = "✅ Payment Successful!";
+                document.getElementById('status').style.color = "green";
+                clearInterval(checkInterval);
+                setTimeout(() => window.location.href = result.redirect_to, 2000);
+            } else if (result.status === 'FRAUD') {
+                document.getElementById('status').innerText = "❌ Fraud Detected: Amount Mismatch";
+                document.getElementById('status').style.color = "red";
+                clearInterval(checkInterval);
+            }
+        }
+        load();
+    </script>
+</body>
+</html>
